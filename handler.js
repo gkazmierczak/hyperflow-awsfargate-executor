@@ -1,5 +1,4 @@
 'use strict';
-
 const childProcess = require("child_process");
 const fs = require("fs");
 const async = require("async");
@@ -26,6 +25,26 @@ function handleRequest(request) {
     const inputs = request.inputs.map(input => input.name);
     const outputs = request.outputs.map(output => output.name);
     const files = inputs.slice();
+//     const files =[
+//         "2mass-atlas-001124n-j0850232.fits",
+// "2mass-atlas-001124n-j0850244.fits",
+// "2mass-atlas-001124n-j0860032.fits",
+// "2mass-atlas-001124n-j0860044.fits",
+
+// "2mass-atlas-001124n-j0870232.fits",
+// "2mass-atlas-001124n-j0870244.fits",
+// "2mass-atlas-001124n-j0880032.fits",
+// "2mass-atlas-001124n-j0880044.fits",
+// "2mass-atlas-001124n-j0890232.fits",
+// "2mass-atlas-001124n-j0890244.fits",
+// "big_region_20180402_165339_22325.hdr",
+// "cimages_20180402_165339_22325.tbl",
+// "images.tbl",
+// "images_20180402_165339_22325.tbl",
+// "pimages_20180402_165339_22325.tbl",
+// "region_20180402_165339_22325.hdr",
+// "statfile_20180402_165339_22325.tbl",
+//     ]
     const logName = request.logName;
     files.push(executable);
 
@@ -52,25 +71,19 @@ function handleRequest(request) {
                 " download start: " + metrics.downloadStart + " download end: " + metrics.downloadEnd +
                 " execution start: " + metrics.executionStart + " execution end: " + metrics.executionEnd +
                 " upload start: " + metrics.uploadStart + " upload end: " + metrics.uploadEnd;
-            if (logName !== undefined) {
-                await s3.putObject({
-                    Bucket: bucket_name,
-                    Key: "logs/" + logName,
-                    ContentType: 'text/plain',
-                    Body: metricsString
-                }).promise();
-            } else {
                 console.log(metricsString);
-            }
         }
     });
+    // console.log("handleRequest")
 
     function download(callback) {
+        // console.log("download start")
         metrics.downloadStart = Date.now();
         async.each(files, function (file, callback) {
+            if (file.endsWith(".js") || file.endsWith(".sh")) {
 
             console.log("Downloading " + bucket_name + "/" + prefix + "/" + file);
-
+            
             const params = {
                 Bucket: bucket_name,
                 Key: prefix + "/" + file
@@ -80,7 +93,7 @@ function handleRequest(request) {
                     console.log("Error downloading file " + JSON.stringify(params));
                     process.exit(1)
                 } else {
-                    const path = "/tmp/" + file;
+                    const path = "/mnt/data/" + file;
                     fs.writeFile(path, data.Body, function (err) {
                         if (err) {
                             console.log("Unable to save file " + path);
@@ -92,6 +105,14 @@ function handleRequest(request) {
                     });
                 }
             });
+        }
+        else{
+            // console.log("local file " + file)
+            if(callback){
+                callback()
+
+            }
+        }
         }, function (err) {
             metrics.downloadEnd = Date.now();
             if (err) {
@@ -106,20 +127,27 @@ function handleRequest(request) {
 
     function execute(callback) {
         metrics.executionStart = Date.now();
-        const proc_name = /tmp/ + "/" + executable;
-        fs.chmodSync(proc_name, "777");
+        let proc_name = executable;
+        if (executable.endsWith(".js") || executable.endsWith(".sh")) {
+            // console.log("remote executable " + executable)
+            proc_name = "/mnt/data/"  + executable;
+            fs.chmodSync(proc_name, "777");
+        }
+        // else {
+        //     console.log("local executable " + executable)
+        // }
 
         let proc;
         console.log("Running executable" + proc_name);
 
         if (proc_name.endsWith(".js")) {
-            proc = childProcess.fork(proc_name, args, {cwd: "/tmp"});
+            proc = childProcess.fork(proc_name, args, {cwd: "/mnt/data/"});
         } else if (proc_name.endsWith(".jar")) {
             let java_args = ['-jar', proc_name];
             const program_args = java_args.concat(args);
-            proc = childProcess.spawn('java', program_args, {cwd: "/tmp"});
+            proc = childProcess.spawn('java', program_args, {cwd: "/mnt/data/"});
         } else {
-            proc = childProcess.spawn(proc_name, args, {cwd: "/tmp"});
+            proc = childProcess.exec(proc_name + " "+ args.join(" "));
 
             proc.stdout.on("data", function (exedata) {
                 console.log("Stdout: " + executable + exedata);
@@ -131,7 +159,7 @@ function handleRequest(request) {
         }
 
         if (request.stdout) {
-            let stdoutStream = fs.createWriteStream("/tmp" + "/" + request.stdout, {flags: 'w'});
+            let stdoutStream = fs.createWriteStream("/mnt/data/" + request.stdout, {flags: 'w'});
             proc.stdout.pipe(stdoutStream);
         }
 
@@ -150,33 +178,40 @@ function handleRequest(request) {
     }
 
     function upload(callback) {
+        // console.log("upload start")
+        // console.log("outputs: " + outputs)
+        console.log("data: ",fs.readdirSync("/mnt/data"))
+        // console.log("tmp: ",fs.readdirSync("/"))
+
         metrics.uploadStart = Date.now();
         async.each(outputs, function (file, callback) {
+            // console.log("Uploading " + bucket_name + "/" + prefix + "/" + file);
+            //     // console.log("Uploading " + bucket_name + "/" + prefix + "/" + file);
+            // const oldpath =  file;
+            // const newpath = "/mnt/data/" + file;
+            // fs.copyFile(oldpath,newpath, (err)=> console.log(err))
+            // callback()
+            // fs.readFile(path, function (err, data) {
+            //     if (err) {
+            //         console.log("Error reading file " + path);
+            //         process.exit(1)
+            //     }
 
-            console.log("Uploading " + bucket_name + "/" + prefix + "/" + file);
-            const path = "/tmp/" + file;
+            //     const params = {
+            //         Bucket: bucket_name,
+            //         Key: prefix + "/" + file,
+            //         Body: data
+            //     };
 
-            fs.readFile(path, function (err, data) {
-                if (err) {
-                    console.log("Error reading file " + path);
-                    process.exit(1)
-                }
-
-                const params = {
-                    Bucket: bucket_name,
-                    Key: prefix + "/" + file,
-                    Body: data
-                };
-
-                s3.putObject(params, function (err) {
-                    if (err) {
-                        console.log("Error uploading file " + file);
-                        process.exit(1)
-                    }
-                    console.log("Uploaded file " + file);
-                    callback();
-                });
-            });
+            //     s3.putObject(params, function (err) {
+            //         if (err) {
+            //             console.log("Error uploading file " + file);
+            //             process.exit(1)
+            //         }
+            //         console.log("Uploaded file " + file);
+            //         callback();
+            //     });
+            // });
 
         }, function (err) {
             metrics.uploadEnd = Date.now();
