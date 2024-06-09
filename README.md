@@ -52,3 +52,10 @@ Remember to update config file - tasks_mapping should have a value corresponding
 Afterwards you can run your workflow using `hflow run .`
 
 For more details check hyperflow page: https://github.com/hyperflow-wms/hyperflow. 
+
+
+## Automated setup
+
+To create the environment for you, you can run
+`cd setup && npm install && node index.js`
+which will install the required modules and setup the infrastructure for you.
