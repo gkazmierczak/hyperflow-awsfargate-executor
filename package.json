@@ -1,12 +1,27 @@
 {
-  "name": "aws-fargate-executor",
-  "version": "1.0.0",
+  "name": "hyperflow-awsfargate-executor",
+  "version": "0.1.0",
+  "license": "MIT",
   "main": "handler.js",
+  "bin": {
+    "hflow-job-execute": "./handler.js"
+  },
   "scripts": {
     "start": "node handler.js"
   },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/hyperflow-wms/hyperflow-awsfargate-executor"
+  },
+  "files": [
+    "handler.js"
+  ],
   "dependencies": {
+    "@stroncium/procfs": "^1.2.1",
     "async": "^2.6.2",
-    "aws-sdk": "^2.429.0"
+    "aws-sdk": "^2.429.0",
+    "log4js": "^6.9.1",
+    "pidusage": "^3.0.2",
+    "shortid": "^2.2.16"
   }
 }
